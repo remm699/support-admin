@@ -19,7 +19,19 @@ support-admin/
 ## Dépendances
 
 ```bash
-pip install pymupdf python-docx chromadb llama-index llama-index-vector-stores-chroma llama-index-embeddings-ollama watchdog --break-system-packages
+pip install pymupdf python-docx chromadb llama-index llama-index-vector-stores-chroma llama-index-embeddings-ollama watchdog fastapi python-multipart --break-system-packages
+```
+
+## Interface Web
+
+```bash
+python3 app.py
+# → http://localhost:8765
+```
+
+Serveur accessible sur `0.0.0.0:8765` (réseau local). Pour y accéder depuis une autre machine :
+```
+http://<adresse-IP>:8765
 ```
 
 ## Usage
