@@ -6,7 +6,7 @@ Usage:
 """
 from fastapi import FastAPI, Form
 from fastapi.responses import HTMLResponse, JSONResponse
-import chromadb
+import chromadb, requests
 from llama_index.embeddings.ollama import OllamaEmbedding
 from llama_index.vector_stores.chroma import ChromaVectorStore
 from llama_index.core import VectorStoreIndex
@@ -17,10 +17,12 @@ from pathlib import Path
 PROJECT_DIR      = Path(__file__).parent
 VECTORSTORE_DIR  = PROJECT_DIR / "chroma_db"
 COLLECTION       = "cisp-reglementation"
-EMBED_MODEL      = "mxbai-embed-large"
-TOP_K            = 5
-CUTOFF           = 0.40
-PORT             = 8765
+EMBED_MODEL     = "mxbai-embed-large"
+LLM_MODEL       = "qwen2.5:7b"
+OLLAMA_BASE     = "http://localhost:11434"
+TOP_K           = 5
+CUTOFF          = 0.40
+PORT            = 8765
 
 # ── FastAPI ──────────────────────────────────────────────────────────────────
 app = FastAPI(title="Support Admin — RAG CISP")
@@ -37,6 +39,44 @@ def get_index():
         vector_store = ChromaVectorStore(chroma_collection=collection)
         _index = VectorStoreIndex.from_vector_store(vector_store, embed_model=embed)
     return _index
+
+def synthesize(query: str, chunks: list) -> str:
+    """Appelle qwen2.5:7b pour synthétiser une réponse à partir des chunks."""
+    if not chunks:
+        return "Aucun document pertinent trouvé pour répondre à cette question."
+
+    context = "\n\n".join(
+        f"[Source {i+1}] {c['source']} (chunk {c['chunk']}):\n{c['text']}"
+        for i, c in enumerate(chunks)
+    )
+
+    prompt = f"""Tu es un assistant experto en administration des Centres d'Insertion Socioprofessionnelle (CISP) en Région wallonne de Belgique.
+
+Utilise UNIQUEMENT les sources fournies ci-dessous pour répondre à la question. Si l'information ne figure pas dans les sources, dis-le clairement.
+
+---
+
+Question: {query}
+
+---
+
+Sources:
+{context}
+
+---
+
+Réponse (en français, synthèse claire et structurée):"""
+
+    try:
+        r = requests.post(
+            f"{OLLAMA_BASE}/api/generate",
+            json={"model": LLM_MODEL, "prompt": prompt, "stream": False, "options": {"temperature": 0.3, "num_predict": 1024}},
+            timeout=120,
+        )
+        r.raise_for_status()
+        return r.json().get("response", "").strip()
+    except Exception as e:
+        return f"[Erreur de synthèse LLM: {e}]"
 
 def search_rag(query: str, top_k: int = TOP_K, cutoff: float = CUTOFF):
     index = get_index()
@@ -59,17 +99,22 @@ async def api_search(q: str = Form(...)):
     except Exception as e:
         return JSONResponse({"results": [], "query": q, "error": str(e)}, status_code=500)
 
+    chunks = [
+        {
+            "score": r.score,
+            "source": r.metadata.get("source", ""),
+            "chunk": r.metadata.get("chunk", ""),
+            "text": r.text[:600],
+        }
+        for r in results
+    ]
+
+    answer = synthesize(q, chunks)
+
     return JSONResponse({
         "query": q,
-        "results": [
-            {
-                "score": round(r.score, 3),
-                "source": r.metadata.get("source", ""),
-                "chunk": r.metadata.get("chunk", ""),
-                "text": r.text[:600],
-            }
-            for r in results
-        ]
+        "answer": answer,
+        "results": chunks,
     })
 
 @app.get("/api/status")

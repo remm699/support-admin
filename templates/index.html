@@ -122,6 +122,31 @@
       margin-bottom: 0.75rem;
     }
 
+    .answer-box {
+      background: #fff;
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      border-left: 4px solid #1a1a2e;
+    }
+
+    .answer-box h3 {
+      font-size: 0.85rem;
+      color: #888;
+      margin-bottom: 0.75rem;
+      font-weight: 400;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .answer-text {
+      font-size: 1rem;
+      line-height: 1.7;
+      color: #222;
+      white-space: pre-wrap;
+    }
+
     .result {
       background: #fff;
       border-radius: 12px;
@@ -257,25 +282,35 @@
         return;
       }
 
-      if (d.results.length === 0) {
+      if (d.results.length === 0 && !d.answer) {
         resultsEl.innerHTML = `<div class="no-results">Aucun résultat trouvé pour « ${escHtml(d.query)} ».<br>Essayez de reformuler la question.</div>`;
         return;
       }
 
-      resultsEl.innerHTML = `<p class="results-info">${d.results.length} résultat${d.results.length > 1 ? 's' : ''} pour « ${escHtml(d.query)} »</p>`;
+      let html = `<p class="results-info">${d.results.length} source${d.results.length > 1 ? 's' : ''} pour « ${escHtml(d.query)} »</p>`;
+
+      if (d.answer) {
+        html += `
+          <div class="answer-box">
+            <h3>Réponse synthétisée</h3>
+            <p class="answer-text">${escHtml(d.answer)}</p>
+          </div>`;
+      }
+
+      html += `<p class="results-info" style="margin-top:1.5rem;margin-bottom:0.75rem;font-weight:600;">Sources</p>`;
 
       for (const r of d.results) {
-        const div = document.createElement('div');
-        div.className = 'result';
-        div.innerHTML = `
+        html += `
+        <div class="result">
           <div class="result-header">
             <span class="result-source">${escHtml(r.source)}</span>
             <span class="result-score">score: ${r.score}</span>
           </div>
           <p class="result-text">${escHtml(r.text)}</p>
-        `;
-        resultsEl.appendChild(div);
+        </div>`;
       }
+
+      resultsEl.innerHTML = html;
     } catch (err) {
       loadingEl.style.display = 'none';
       submitBtn.disabled = false;
